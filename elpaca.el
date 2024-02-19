@@ -1607,7 +1607,7 @@ When MESSAGE is non-nil, message the list of dependents."
   "Queue ORDER for installation/activation, defer execution of BODY.
 If ORDER is `nil`, defer BODY until orders have been processed."
   (declare (indent 1) (debug t))
-  (let ((o (gensym "order-")) (id (gensym "id-")) (q (gensym "q-")))
+  (let ((o (gensym "order-")) (id (gensym "id-")) (q (gensym "q-")) (e (gensym "e-")))
     `(let* ((,o ,@(if (memq (car-safe order) '(quote \`)) `(,order) `(',order)))
             (,id (elpaca--first ,o))
             (,q (or (and after-init-time (elpaca--q (elpaca-get ,id))) (car elpaca--queues))))
@@ -1616,17 +1616,22 @@ If ORDER is `nil`, defer BODY until orders have been processed."
                  (setf (alist-get ,id (elpaca-q<-forms ,q)) ',body)
                ;;@FIX: nil semantics not good for multiple deferred...
                (push (cons ,id ',body) (elpaca-q<-forms ,q)))))
-       (when ,o (elpaca--queue ,o ,q))
-       (when after-init-time
-         (when-let ((e (elpaca-get ,id)))
-           (elpaca--maybe-log)
-           (elpaca--unprocess e)
-           (push 'queued (elpaca<-statuses e)))
-         (when (member this-command '(eval-last-sexp eval-defun)) (elpaca-process-queues))
-         (when (member this-command '(eval-region eval-buffer org-ctrl-c-ctrl-c))
-           (when elpaca--interactive-timer (cancel-timer elpaca--interactive-timer))
-           (run-at-time elpaca-interactive-interval nil #'elpaca-process-queues)))
-       nil)))
+       (when ,o (setq ,e (elpaca--queue ,o ,q)))
+       (if (and ,e (plist-get (elpaca<-recipe ,e) :wait))
+           (progn (when after-init-time
+                    (elpaca--unprocess ,e)
+                    (push 'queued (elpaca<-statuses ,e)))
+                  (elpaca-wait))
+         (when after-init-time
+           (when-let ((e (elpaca-get ,id)))
+             (elpaca--maybe-log)
+             (elpaca--unprocess e)
+             (push 'queued (elpaca<-statuses e)))
+           (when (member this-command '(eval-last-sexp eval-defun)) (elpaca-process-queues))
+           (when (member this-command '(eval-region eval-buffer org-ctrl-c-ctrl-c))
+             (when elpaca--interactive-timer (cancel-timer elpaca--interactive-timer))
+             (run-at-time elpaca-interactive-interval nil #'elpaca-process-queues)))
+         nil))))
 
 (defcustom elpaca-wait-interval 0.01 "Seconds between `elpaca-wait' status checks."
   :type 'number)
