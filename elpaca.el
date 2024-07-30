@@ -86,6 +86,8 @@ Note blocked or failed orders will prevent this hook from being run."
   "If non-nil, cache package autoloads and load all at once.
 Results in faster start-up time." :type 'boolean)
 
+(defcustom elpaca-lock-file nil "Location of the package lockfile." :type 'path)
+
 (defcustom elpaca-directory (expand-file-name "elpaca" user-emacs-directory)
   "Location of the elpaca package store." :type 'directory)
 
@@ -178,7 +180,7 @@ This hook is run via `run-hook-with-args-until-success'."
                                             :build '(:not elpaca--compile-info))))))))
 
 (defcustom elpaca-menu-functions
-  '( elpaca-menu-extensions elpaca-menu-org elpaca-menu-melpa elpaca-menu-non-gnu-devel-elpa
+  '(elpaca-menu-lockfile elpaca-menu-extensions elpaca-menu-org elpaca-menu-melpa elpaca-menu-non-gnu-devel-elpa
      elpaca-menu-gnu-devel-elpa elpaca-menu-non-gnu-elpa elpaca-menu-gnu-elpa )
   "Abnormal hook to lookup packages in menus.
 Each function is passed a request, which may be any of the following symbols:
@@ -2019,10 +2021,15 @@ If INTERACTIVE is non-nil, process queues."
     (not (string-empty-p (elpaca-process-output
                           "git" "-c" "status.branch=false" "status" "--short")))))
 
-(defun elpaca-load-lockfile (&optional lockfile _force)
-  "Load LOCKFILE.  If FORCE is non-nil, @TODO."
-  (interactive "fLockfile: ")
-  (message "%S" lockfile))
+(defvar elpaca-menu-lockfile--index-cache
+  (when elpaca-lock-file (elpaca--read-file elpaca-lock-file))
+  "Cache of lockfile index.")
+
+;;;###autoload
+(defun elpaca-menu-lockfile (_)
+  "Return locked package menu items."
+  (or elpaca-menu-lockfile--index-cache
+      (when elpaca-lock-file (elpaca--read-file elpaca-lock-file))))
 
 (defun elpaca-write-lockfile (path)
   "Write lockfile to PATH for current state of package repositories."
